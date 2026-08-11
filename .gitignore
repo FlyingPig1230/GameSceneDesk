@@ -1,0 +1,26 @@
+# Python environments and caches
+.venv/
+.build-venv-macos/
+.build-venv-windows/
+__pycache__/
+*.py[cod]
+
+# Training data and generated evaluation output
+data/
+evaluation/
+screenshots/
+tmp/
+
+# Build output
+build/
+dist/
+*.spec.bak
+
+# Local launchers, legacy wrapper, and logs
+Ascent Map Recognizer.app/
+Start-Ascent.command
+*.log
+edit.txt
+
+# macOS metadata
+.DS_Store
