@@ -1,5 +1,23 @@
 # GameSceneDesk
 
+## 界面预览 / Screenshots
+
+### 多地图区域识别 / Multi-map Recognition
+
+![GameSceneDesk 多地图区域识别界面](docs/images/recognition.png)
+
+| 批量纠错 / Batch Correction | 错题回顾 / Wrong-case Review |
+|:---:|:---:|
+| ![批量纠错界面](docs/images/batch-correction.png) | ![错题回顾界面](docs/images/wrong-case-review.png) |
+
+### 模型评估 / Model Evaluation
+
+<p align="center">
+  <img src="docs/images/evaluation-report.png" alt="GameSceneDesk 模型评估报告" width="720">
+</p>
+
+---
+
 ## 中文介绍
 
 GameSceneDesk 是一个面向《VALORANT》游戏截图的实验性 AI 桌面应用。导入或拖放截图后，应用可以自动判断地图，并预测画面所在的具体区域，同时展示 Top 3 匹配结果与置信度，帮助玩家整理素材、分析场景，也为游戏视觉识别模型的训练与研究提供一个直观的工作台。
