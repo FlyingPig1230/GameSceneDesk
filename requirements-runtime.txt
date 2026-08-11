@@ -1,0 +1,6 @@
+# Cross-platform inference runtime. Keep training-only packages out of builds.
+PySide6-Essentials==6.11.1
+torch==2.12.1
+torchvision==0.27.1
+Pillow==12.3.0
+numpy==2.5.1

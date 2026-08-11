@@ -1,0 +1,23 @@
+# Full development and training environment.
+# Release builds use requirements-runtime.txt instead.
+
+# GUI
+PySide6>=6.8.0
+
+# AI
+torch
+torchvision
+
+# Image Processing
+opencv-python
+Pillow
+numpy
+
+# Progress Bar
+tqdm
+
+# Machine Learning Utils
+scikit-learn
+
+# Optional
+matplotlib
