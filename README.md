@@ -1,10 +1,5 @@
 # GameSceneDesk
 
-> A local AI desktop tool for recognizing maps and in-game locations from VALORANT screenshots.  
-> 一款从《VALORANT》游戏截图中识别地图与区域位置的本地 AI 桌面工具。
-
----
-
 ## 中文介绍
 
 GameSceneDesk 是一个面向《VALORANT》游戏截图的实验性 AI 桌面应用。导入或拖放截图后，应用可以自动判断地图，并预测画面所在的具体区域，同时展示 Top 3 匹配结果与置信度，帮助玩家整理素材、分析场景，也为游戏视觉识别模型的训练与研究提供一个直观的工作台。
