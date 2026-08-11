@@ -1,5 +1,15 @@
 # GameSceneDesk
 
+## 快速参考 / Quick Reference
+
+| 平台 / Platform | 当前状态 / Current status | 获取方式 / How to get it |
+|---|---|---|
+| macOS 15+ Apple Silicon | 已在本机生成并验证独立 `.app`；当前为 ad-hoc 签名且尚未公证 / A standalone `.app` has been built and verified locally; it is ad-hoc signed and not notarized | 本地输出：`dist/macos/Ascent-Map-Recognizer-macOS-arm64.zip`；也可运行 `zsh build_macos.sh` 重新构建 / Local output: `dist/macos/Ascent-Map-Recognizer-macOS-arm64.zip`; rebuild with `zsh build_macos.sh` |
+| Windows 10/11 x64 | 尚无已构建、已验证的 Windows `.exe`；当前只有构建脚本 / No built and verified Windows `.exe` yet; build scripts only | 必须在 Windows PowerShell 中运行 `.\build_windows.ps1` / Run `.\build_windows.ps1` in Windows PowerShell |
+
+> GitHub Releases 当前没有可下载附件，仓库中的构建脚本也不是成品安装包。完整步骤见 [构建说明 / Build guide](BUILDING.md)。
+> There are currently no downloadable GitHub Release assets, and the build scripts in this repository are not packaged applications. See the [build guide](BUILDING.md) for complete instructions.
+
 ## 界面预览 / Screenshots
 
 ### 多地图区域识别 / Multi-map Recognition
