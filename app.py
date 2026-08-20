@@ -1,10 +1,19 @@
 import csv
+from datetime import datetime
 import json
 import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QProcess, QRectF, Qt, QTimer
+from PySide6.QtCore import (
+    QPoint,
+    QProcess,
+    QRectF,
+    QThread,
+    Qt,
+    QTimer,
+    Signal
+)
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -28,6 +37,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QProgressBar,
+    QProgressDialog,
     QProxyStyle,
     QPushButton,
     QScrollArea,
@@ -42,6 +52,7 @@ from app_paths import (
     APP_NAME,
     ASSETS_DIR,
     DATA_DIR,
+    IS_FROZEN,
     RESOURCE_ROOT,
     SOURCE_DATA_DIR
 )
@@ -49,6 +60,10 @@ from feedback import (
     FEEDBACK_LOG,
     save_feedback,
     save_irrelevant_feedback
+)
+from feedback_export import (
+    export_feedback_bundle,
+    get_feedback_export_summary
 )
 from map_config import (
     AUTO_MAP,
@@ -72,7 +87,9 @@ LEGACY_EVALUATION_SUMMARY_PATH = (
 LEGACY_EVALUATION_REPORT_PATH = (
     APP_DIR / "evaluation" / "report.csv"
 )
-ENABLE_MODEL_TOOLS = False
+# Source runs are the private developer/trainer edition. Frozen PyInstaller
+# builds are the public tester edition and never expose model-management tools.
+ENABLE_MODEL_TOOLS = not IS_FROZEN
 IMAGE_EXTENSIONS = {
     ".jpg",
     ".jpeg",
@@ -1552,16 +1569,79 @@ class TrainingMapDialog(QDialog):
         )
 
 
+class FeedbackExportProgressDialog(QProgressDialog):
+    def __init__(self, parent=None):
+        super().__init__(
+            "正在整理并压缩反馈，请稍候……",
+            "",
+            0,
+            0,
+            parent
+        )
+        self._can_close = False
+        self.setWindowTitle("导出反馈包")
+        self.setCancelButton(None)
+        self.setWindowModality(Qt.WindowModal)
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+        self.setMinimumDuration(0)
+        self.setAutoClose(False)
+        self.setAutoReset(False)
+
+    def finish_export(self):
+        self._can_close = True
+        self.close()
+
+    def reject(self):
+        if self._can_close:
+            super().reject()
+
+    def closeEvent(self, event):
+        if self._can_close:
+            super().closeEvent(event)
+        else:
+            event.ignore()
+
+
+class FeedbackExportWorker(QThread):
+    export_succeeded = Signal(dict)
+    export_failed = Signal(str)
+
+    def __init__(
+        self,
+        destination,
+        overwrite=False,
+        parent=None
+    ):
+        super().__init__(parent)
+        self.destination = destination
+        self.overwrite = overwrite
+
+    def run(self):
+        try:
+            result = export_feedback_bundle(
+                self.destination,
+                overwrite=self.overwrite
+            )
+        except Exception as error:
+            self.export_failed.emit(str(error))
+            return
+
+        self.export_succeeded.emit(result)
+
+
 class HistoryDialog(QDialog):
     def __init__(
         self,
         parent,
         records,
         skipped_count=0,
-        on_clear_history=None
+        on_clear_history=None,
+        on_export_feedback=None,
+        export_available=False
     ):
         super().__init__(parent)
         self.on_clear_history = on_clear_history
+        self.on_export_feedback = on_export_feedback
         self.history_cleared = False
         self.setModal(True)
         self.setWindowTitle("历史记录")
@@ -1613,12 +1693,26 @@ class HistoryDialog(QDialog):
             self._confirm_clear_history
         )
 
+        export_button = QPushButton("导出反馈")
+        export_button.setObjectName("HistoryExportButton")
+        export_button.setToolTip(
+            "导出脱敏日志和对应截图，手动发送给维护者"
+        )
+        export_button.setEnabled(
+            self.on_export_feedback is not None
+            and export_available
+        )
+        export_button.clicked.connect(
+            self._export_feedback
+        )
+
         close_button = QPushButton("关闭")
         close_button.setObjectName("HistoryCloseButton")
         close_button.clicked.connect(self.accept)
 
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
+        header_layout.addWidget(export_button)
         header_layout.addWidget(clear_button)
         header_layout.addWidget(close_button)
 
@@ -1782,7 +1876,8 @@ class HistoryDialog(QDialog):
             }
 
             QPushButton#HistoryCloseButton,
-            QPushButton#HistoryClearButton {
+            QPushButton#HistoryClearButton,
+            QPushButton#HistoryExportButton {
                 background-color: #263646;
                 border: 1px solid #3d5062;
                 border-radius: 7px;
@@ -1815,8 +1910,29 @@ class HistoryDialog(QDialog):
                 border-color: #273341;
                 color: #657386;
             }
+
+            QPushButton#HistoryExportButton {
+                background-color: #173047;
+                border-color: #2f6c91;
+                color: #b9e5ff;
+            }
+
+            QPushButton#HistoryExportButton:hover {
+                background-color: #1d405d;
+                border-color: #4a91bd;
+            }
+
+            QPushButton#HistoryExportButton:disabled {
+                background-color: #1a222d;
+                border-color: #273341;
+                color: #657386;
+            }
             """
         )
+
+    def _export_feedback(self):
+        if self.on_export_feedback:
+            self.on_export_feedback(self)
 
     def _confirm_clear_history(self):
         if not self.on_clear_history:
@@ -1975,6 +2091,15 @@ class MainWindow(QMainWindow):
         self.batch_irrelevant_count = 0
         self.batch_expected_classes = {}
         self.batch_kind = "manual"
+        self.feedback_export_worker = None
+        self.feedback_export_progress = None
+        self.feedback_export_dialog_parent = None
+        application = QApplication.instance()
+
+        if application:
+            application.aboutToQuit.connect(
+                self._wait_for_feedback_export
+            )
 
         try:
             self.model_service = ModelService()
@@ -4071,11 +4196,14 @@ class MainWindow(QMainWindow):
 
     def show_history(self):
         records, skipped_count = self._load_feedback_history()
+        export_summary = get_feedback_export_summary()
         dialog = HistoryDialog(
             self,
             records,
             skipped_count,
-            self.clear_feedback_history
+            self.clear_feedback_history,
+            self.export_feedback,
+            export_summary["total"] > 0
         )
         dialog.exec()
 
@@ -4096,6 +4224,201 @@ class MainWindow(QMainWindow):
                 f"已清空 {removed_count} 条预测正确记录。",
                 f"保留 {correction_count} 条纠错记录，地图图片文件没有被删除。"
             ).exec()
+
+    def export_feedback(self, dialog_parent=None):
+        dialog_parent = dialog_parent or self
+        export_summary = get_feedback_export_summary()
+
+        if export_summary["total"] == 0:
+            QMessageBox.information(
+                dialog_parent,
+                "没有可导出的反馈",
+                "请先完成至少一条有效反馈。"
+            )
+            return
+
+        skipped_summary = (
+            f"另有 {export_summary['skipped']} 条无效或缺少截图的记录"
+            "不会导出。\n\n"
+            if export_summary["skipped"]
+            else ""
+        )
+
+        confirmation = ConfirmDialog(
+            dialog_parent,
+            "导出反馈包？",
+            (
+                "将导出："
+                f"预测正确 {export_summary['correct']} 条、"
+                f"纠错 {export_summary['corrected']} 条、"
+                f"无关图片 {export_summary['irrelevant']} 条。\n\n"
+                + skipped_summary
+                + "ZIP 会保留原始截图内容和图片文件可能携带的元数据；"
+                "截图可能显示玩家名、聊天或其他隐私信息。"
+                "日志中的本机绝对路径、原始文件名和未识别字段会被移除。"
+            ),
+            confirm_text="选择保存位置",
+            cancel_text="取消"
+        )
+
+        if confirmation.exec() != QDialog.Accepted:
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        downloads_directory = Path.home() / "Downloads"
+        output_directory = (
+            downloads_directory
+            if downloads_directory.exists()
+            else Path.home()
+        )
+        suggested_path = (
+            output_directory
+            / f"GameSceneDesk-feedback-{timestamp}.zip"
+        )
+        output_path, _ = QFileDialog.getSaveFileName(
+            dialog_parent,
+            "导出反馈包",
+            str(suggested_path),
+            "ZIP 压缩包 (*.zip)",
+            # Final ZIP normalization and overwrite confirmation are handled
+            # below so paths without a suffix cannot bypass the prompt.
+            options=QFileDialog.DontConfirmOverwrite
+        )
+
+        if not output_path:
+            return
+
+        final_output_path = Path(output_path).expanduser()
+
+        if final_output_path.suffix.lower() != ".zip":
+            final_output_path = Path(
+                f"{final_output_path}.zip"
+            )
+
+        overwrite = False
+
+        if final_output_path.exists():
+            overwrite_confirmation = ConfirmDialog(
+                dialog_parent,
+                "覆盖已有反馈包？",
+                f"目标文件已存在：\n{final_output_path}",
+                confirm_text="覆盖",
+                cancel_text="取消"
+            )
+
+            if (
+                overwrite_confirmation.exec()
+                != QDialog.Accepted
+            ):
+                return
+
+            overwrite = True
+
+        if (
+            self.feedback_export_worker
+            and self.feedback_export_worker.isRunning()
+        ):
+            return
+
+        progress = FeedbackExportProgressDialog(dialog_parent)
+        progress.show()
+
+        worker = FeedbackExportWorker(
+            final_output_path,
+            overwrite=overwrite,
+            parent=self
+        )
+        self.feedback_export_worker = worker
+        self.feedback_export_progress = progress
+        self.feedback_export_dialog_parent = dialog_parent
+        worker.export_succeeded.connect(
+            self._feedback_export_succeeded
+        )
+        worker.export_failed.connect(
+            self._feedback_export_failed
+        )
+        worker.finished.connect(
+            self._feedback_export_finished
+        )
+        worker.start()
+
+    def _feedback_export_succeeded(self, result):
+        if self.feedback_export_progress:
+            self.feedback_export_progress.finish_export()
+
+        dialog_parent = (
+            self.feedback_export_dialog_parent or self
+        )
+        records = result["records"]
+        images = result["images"]
+        skipped_count = records.get("skipped", 0)
+        self.status_label.setText(
+            f"已导出 {records['total']} 条反馈"
+        )
+        skipped_text = (
+            f"另有 {skipped_count} 条无效或缺少截图的记录未导出。\n\n"
+            if skipped_count
+            else ""
+        )
+        ResultDialog(
+            dialog_parent,
+            "反馈包已导出",
+            (
+                f"已导出 {records['total']} 条记录和 "
+                f"{images['total']} 张图片。"
+            ),
+            (
+                skipped_text
+                + "请将这个 ZIP 文件手动发送给项目维护者。\n\n"
+                f"{result['path']}"
+            )
+        ).exec()
+
+    def _feedback_export_failed(self, error_message):
+        if self.feedback_export_progress:
+            self.feedback_export_progress.finish_export()
+
+        dialog_parent = (
+            self.feedback_export_dialog_parent or self
+        )
+        QMessageBox.critical(
+            dialog_parent,
+            "导出反馈失败",
+            error_message
+        )
+
+    def _feedback_export_finished(self):
+        if self.feedback_export_progress:
+            self.feedback_export_progress.finish_export()
+
+        if self.feedback_export_worker:
+            self.feedback_export_worker.deleteLater()
+
+        self.feedback_export_worker = None
+        self.feedback_export_progress = None
+        self.feedback_export_dialog_parent = None
+
+    def _wait_for_feedback_export(self):
+        if (
+            self.feedback_export_worker
+            and self.feedback_export_worker.isRunning()
+        ):
+            self.feedback_export_worker.wait()
+
+    def closeEvent(self, event):
+        if (
+            self.feedback_export_worker
+            and self.feedback_export_worker.isRunning()
+        ):
+            if self.feedback_export_progress:
+                self.feedback_export_progress.show()
+                self.feedback_export_progress.raise_()
+                self.feedback_export_progress.activateWindow()
+
+            event.ignore()
+            return
+
+        super().closeEvent(event)
 
     def clear_feedback_history(self):
         try:

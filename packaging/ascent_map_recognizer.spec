@@ -15,8 +15,10 @@ RESOURCE_FILES = (
     "assets/valorant_mark_transparent.png",
     "assets/riot_mark_transparent.png",
     "models/ascent_area_classifier.pt",
+    "models/ascent_classes.json",
     "models/ascent_relevance_profile.pt",
     "models/split_area_classifier.pt",
+    "models/split_classes.json",
     "models/split_relevance_profile.pt",
 )
 
