@@ -9,6 +9,7 @@ if ($env:OS -ne "Windows_NT") {
 }
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$AppVersion = "1.0.0"
 $BuildVenv = Join-Path $RootDir ".build-venv-windows"
 $BuildPython = Join-Path $BuildVenv "Scripts\python.exe"
 $SpecFile = Join-Path $RootDir "packaging\ascent_map_recognizer.spec"
@@ -16,15 +17,17 @@ $DistDir = Join-Path $RootDir "dist\windows"
 $WorkDir = Join-Path $RootDir "build\windows"
 $env:PYINSTALLER_CONFIG_DIR = Join-Path $RootDir "build\pyinstaller-cache\windows"
 $OutputDir = Join-Path $DistDir "Ascent Map Recognizer"
-$ZipPath = Join-Path $DistDir "Ascent-Map-Recognizer-Windows-x64.zip"
+$ZipPath = Join-Path $DistDir "Ascent-Map-Recognizer-Public-Tester-v$AppVersion-Windows-x64.zip"
 
 $RequiredFiles = @(
     "assets\app_icon_transparent.png",
     "assets\valorant_mark_transparent.png",
     "assets\riot_mark_transparent.png",
     "models\ascent_area_classifier.pt",
+    "models\ascent_classes.json",
     "models\ascent_relevance_profile.pt",
     "models\split_area_classifier.pt",
+    "models\split_classes.json",
     "models\split_relevance_profile.pt"
 )
 

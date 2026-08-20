@@ -3,13 +3,14 @@
 set -euo pipefail
 
 ROOT_DIR="${0:A:h}"
+APP_VERSION="1.0.0"
 BUILD_VENV="$ROOT_DIR/.build-venv-macos"
 SPEC_FILE="$ROOT_DIR/packaging/ascent_map_recognizer.spec"
 DIST_DIR="$ROOT_DIR/dist/macos"
 WORK_DIR="$ROOT_DIR/build/macos"
 export PYINSTALLER_CONFIG_DIR="$ROOT_DIR/build/pyinstaller-cache/macos"
 APP_PATH="$DIST_DIR/Ascent Map Recognizer.app"
-ZIP_PATH="$DIST_DIR/Ascent-Map-Recognizer-macOS-arm64.zip"
+ZIP_PATH="$DIST_DIR/Ascent-Map-Recognizer-Public-Tester-v${APP_VERSION}-macOS-arm64.zip"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     echo "This script must run on macOS."
@@ -27,8 +28,10 @@ required_files=(
     "assets/valorant_mark_transparent.png"
     "assets/riot_mark_transparent.png"
     "models/ascent_area_classifier.pt"
+    "models/ascent_classes.json"
     "models/ascent_relevance_profile.pt"
     "models/split_area_classifier.pt"
+    "models/split_classes.json"
     "models/split_relevance_profile.pt"
 )
 
